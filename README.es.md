@@ -18,7 +18,7 @@ Reloj y estación meteorológica para el **T-Keyboard** de LilyGO (ESP32-C3 con 
 - **Apagado automático** de la pantalla a los 5 s sin pulsar ninguna tecla. Cualquier tecla la enciende.
 - **Arranque sin bloqueos**: el teclado y la pantalla responden mientras la placa conecta el WiFi.
 - **Icono de WiFi** arriba a la derecha: blanco si hay red, rojo tachado si no.
-- **Hora sin red**: sin conexión, el reloj sigue contando mientras la placa tenga alimentación y, tras reiniciar, retoma la última hora guardada.
+- **Comportamiento sin red**: sin conexión, el reloj sigue contando mientras la placa tenga alimentación. Tras apagarla, muestra `--:--` hasta que conecte NTP, y la vista de tiempo muestra el último dato recibido.
 
 ## Hardware
 
@@ -63,13 +63,14 @@ Si más adelante la red guardada no está al alcance, el reloj sigue funcionando
 
 - Sincronizada con `pool.ntp.org` y `time.google.com` cuando hay WiFi. Zona horaria: `CET-1CEST,M3.5.0,M10.5.0/3` (Europe/Madrid).
 - **Sin red:** el reloj sigue contando mientras la placa tenga alimentación, aunque el oscilador interno puede desviarse varios minutos al día.
-- **Cada 30 minutos** se guarda la hora sincronizada en la memoria flash. Tras reiniciar sin red, la placa muestra la última hora guardada. Irá atrasada en el tiempo que haya estado apagada hasta que vuelva la red y NTP la corrija.
+- **Tras un apagado** la placa no tiene una hora fiable: muestra `--:--` hasta que vuelva a conectarse a la red.
 - El **icono WiFi rojo tachado** indica que la hora y el tiempo pueden ser aproximados.
 
 ## Tiempo
 
 - Datos de [Open-Meteo](https://open-meteo.com) (`current`: temperatura, humedad relativa y código de tiempo WMO).
 - Se actualiza cada **15 minutos**; si falla, reintenta a los **60 s**.
+- El último dato recibido se guarda en la memoria flash. Tras reiniciar sin red se muestra, siempre que la ciudad guardada siga siendo la elegida, hasta que lleguen datos nuevos.
 - La vista de tiempo muestra `NN grados, HH%` en la primera línea y una descripción corta (hasta 16 caracteres) en la segunda.
 - Códigos WMO: 0 despejado; 1–2 poco nuboso; 3 nublado; 45–48 niebla; 51–67 y 80–82 lluvia; 71–77 y 85–86 nieve; 95–99 tormenta.
 
@@ -103,7 +104,7 @@ El `platformio.ini` usa `espressif32 @ 6.1` con la placa `ttgo-t-oi-plus`, y la 
 
 ## Limitaciones
 
-- Sin RTC con pila: tras un corte de corriente, la hora es aproximada hasta que NTP la sincroniza.
+- Sin RTC con pila: tras un corte de corriente, el reloj muestra `--:--` hasta que NTP lo sincroniza.
 - Algunos textos en pantalla evitan la letra **ó** mientras hay pendiente un problema de la fuente con los acentos.
 - La API gratuita de Open-Meteo es solo para **uso no comercial** (menos de 10 000 llamadas al día). Para uso comercial hace falta un plan de pago.
 

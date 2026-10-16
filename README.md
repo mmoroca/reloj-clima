@@ -18,7 +18,7 @@ A clock and weather display for the LilyGO **T-Keyboard** (ESP32-C3 with a 0.99"
 - **Auto screen-off** after 5 s without key presses. Any key wakes it up.
 - **Non-blocking start**: the keyboard and screen respond while WiFi connects.
 - **WiFi icon** in the top-right corner: white when connected, red and crossed out when not.
-- **Offline time**: without network, the clock keeps running while powered and resumes from the last saved time after a reboot.
+- **Offline behaviour**: without network, the clock keeps running while the device is powered. After a power-off it shows `--:--` until NTP syncs, and the weather view shows the last data received.
 
 ## Hardware
 
@@ -63,13 +63,14 @@ If the saved network is not in range later, the clock keeps working (see [Time](
 
 - Synchronised with `pool.ntp.org` and `time.google.com` when WiFi is connected. Time zone: `CET-1CEST,M3.5.0,M10.5.0/3` (Europe/Madrid).
 - **Without network:** the clock keeps running while the device is powered, although the internal oscillator can drift by several minutes a day.
-- **Every 30 minutes** the synchronised time is saved in flash memory. After a reboot without network, the device shows the last saved time. It will be behind by the time the device was off, until it reconnects and NTP corrects it.
+- **After a power-off** the device has no reliable time: it shows `--:--` until it connects to the network again.
 - The **red crossed WiFi icon** tells you the time and weather may be approximate.
 
 ## Weather
 
 - Data from [Open-Meteo](https://open-meteo.com) (`current`: temperature, relative humidity, and WMO weather code).
 - Updated every **15 minutes**; if it fails, it retries after **60 s**.
+- The last data received is saved in flash memory. After a restart without network it is shown, as long as the saved city is still the selected one, until new data arrives.
 - The weather view shows: `NN grados, HH%` on the first line and a short description (up to 16 characters) on the second.
 - WMO codes: 0 clear; 1–2 partly cloudy; 3 cloudy; 45–48 fog; 51–67 and 80–82 rain; 71–77 and 85–86 snow; 95–99 storm.
 
@@ -103,7 +104,7 @@ The `platformio.ini` file uses `espressif32 @ 6.1` with the board `ttgo-t-oi-plu
 
 ## Limitations
 
-- No real-time clock with battery: after a power cut, the time is only approximate until NTP syncs.
+- No real-time clock with battery: after a power cut, the clock shows `--:--` until NTP syncs.
 - Some Spanish on-screen texts avoid the letter **ó** while a font issue is pending.
 - The free Open-Meteo API is for **non-commercial use** only (fewer than 10,000 calls per day). Commercial use requires a paid plan.
 

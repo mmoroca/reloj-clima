@@ -1,8 +1,9 @@
 // Reloj con tiempo atmosférico para el T-Keyboard (ESP32-C3, pantalla GC9D01N 40x160).
 //
 // - Hora por NTP, zona horaria Europe/Madrid (con cambio de hora). Sin red, la hora sigue
-//   contando; se guarda cada 30 min y se restaura al arrancar hasta que vuelva NTP.
+//   contando mientras la placa esté encendida; al apagarla se pierde y muestra --:--.
 // - Tiempo por Open-Meteo (sin clave API) para la ciudad elegida en la configuración.
+//   Se guarda el último dato obtenido y se muestra al arrancar sin red (misma ciudad).
 // - Configuración WiFi por portal: si no hay red guardada, o si mantienes ALT al encender,
 //   la placa crea la red "RelojClima-XXXX" y la página de configuración está en 192.168.4.1.
 // - Teclas: barra espaciadora cambia entre reloj y tiempo; ALT cambia el estilo del reloj.
@@ -18,7 +19,6 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <time.h>
-#include <sys/time.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -454,33 +454,6 @@ static bool local_hm(int &hh, int &mm) {
     return true;
 }
 
-// La hora sigue corriendo mientras la placa está encendida. Para no perderla al reiniciar,
-// se guarda cada 30 min y, al arrancar, se restaura esa hora (aproximada) hasta que llegue NTP.
-#define TIME_SAVE_EVERY_MS (30UL * 60UL * 1000UL)
-static bool restore_saved_time() {
-    Preferences p;
-    p.begin("clima", true);
-    uint64_t t = p.getULong64("last_epoch", 0);
-    p.end();
-    if (t <= 1700000000ULL) return false;
-    struct timeval tv = {(time_t) t, 0};
-    settimeofday(&tv, nullptr);
-    Serial.println("Hora aproximada restaurada de la última vez");
-    return true;
-}
-
-static void save_time_maintenance() {
-    static unsigned long next_save_ms = 0;
-    if (!time_ready()) return;
-    unsigned long now = millis();
-    if (now < next_save_ms) return;
-    next_save_ms = now + TIME_SAVE_EVERY_MS;
-    Preferences p;
-    p.begin("clima", false);
-    p.putULong64("last_epoch", (uint64_t) time(nullptr));
-    p.end();
-}
-
 // ------------------------------------------------------------------ configuración
 
 struct Config {
@@ -710,6 +683,31 @@ static bool screen_on = true;
 static unsigned long last_key_ms = 0;
 static bool redraw = true;
 static int shown_key = -2;  // minuto mostrado; -1 si no hay hora
+// Último dato del tiempo guardado en flash: se muestra al arrancar sin red si es de la misma ciudad.
+static void save_weather(uint8_t city) {
+    Preferences p;
+    p.begin("clima", false);
+    p.putUChar("w_city", city);
+    p.putFloat("w_temp", weather.temp);
+    p.putInt("w_hum", weather.hum);
+    p.putInt("w_code", weather.code);
+    p.end();
+}
+
+static void restore_weather(uint8_t city) {
+    Preferences p;
+    p.begin("clima", true);
+    bool same = p.isKey("w_city") && p.getUChar("w_city", 255) == city;
+    if (same) {
+        weather.temp = p.getFloat("w_temp", 0.0f);
+        weather.hum = p.getInt("w_hum", 0);
+        weather.code = p.getInt("w_code", -1);
+        weather.valid = true;
+        Serial.println("Tiempo: último dato guardado");
+    }
+    p.end();
+}
+
 static unsigned long next_weather_ms = 0;
 static unsigned long next_wifi_check_ms = 0;
 
@@ -828,7 +826,10 @@ static void weather_maintenance() {
 
     bool ok = fetch_weather(CITIES[cfg.city]);
     next_weather_ms = now + (ok ? WEATHER_EVERY_MS : WEATHER_RETRY_MS);
-    if (ok) redraw = true;
+    if (ok) {
+        save_weather(cfg.city);
+        redraw = true;
+    }
 }
 
 static void wifi_maintenance() {
@@ -873,12 +874,12 @@ void setup() {
         clock_style = p.getUChar("style", 0) % STYLE_COUNT;
         p.end();
     }
+    restore_weather(cfg.city);
     if (alt_at_boot || !cfg.valid) {
         run_portal();  // no vuelve
     }
 
     // Conexión WiFi sin bloquear: el teclado y la pantalla siguen respondiendo mientras conecta.
-    restore_saved_time();
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
     WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
@@ -893,7 +894,6 @@ void loop() {
     run_clock();
     wifi_maintenance();
     time_maintenance();
-    save_time_maintenance();
     weather_maintenance();
     delay(20);
 }
